@@ -3,7 +3,11 @@ from sqlalchemy.orm import sessionmaker
 
 
 class Conn(object):
-
+    """
+    数据库连接对象
+    更换db_config以更换数据库
+    连接session作为属性
+    """
     db_config = 'mysql+pymysql://root:@localhost:3306/zhihu?charset=utf8'
 
     session = None
