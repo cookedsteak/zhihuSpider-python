@@ -7,6 +7,9 @@ Base = declarative_base()
 
 
 class Users(Base):
+    """
+    用户表映射
+    """
     __tablename__ = 'zhihu_users'
 
     id = Column('id', Integer, primary_key=True)
