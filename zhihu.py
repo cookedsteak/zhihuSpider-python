@@ -8,7 +8,7 @@ header = {
     'Connection': 'Keep-Alive',
     'Accept-Encoding':	'gzip, deflate, br',
     'Referer':	'https://www.zhihu.com/',
-    #cookie here
+    'Cookie':	'your cookie here',
     'Host':	'www.zhihu.com',
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:46.0) Gecko/20100101 Firefox/46.0',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -34,6 +34,10 @@ def getpageinfo(username):
     user['username'] = username
     user['followees'] = re.search('(?<=<span class="zg-gray-normal">关注了</span><br /><strong>).*?(?=</strong>)', subject).group()
     user['followers'] = re.search('(?<=<span class="zg-gray-normal">关注者</span><br /><strong>).*?(?=</strong>)', subject).group()
+    try:
+        user['focus'] = re.search('(?<=<span class="business item" title=").*?(?=">)', subject).group()
+    except:
+        user['focus'] = '未知'
     return user
 
 def getfollowees(data):
@@ -51,15 +55,23 @@ if __name__ == '__main__':
     # start db session
     conn = Conn().session
     # use cookie to get personal page and info
-    spiderman = spider.Spider(header=header, url=url_followers)
+    spiderman = spider.Spider(header=header, url=url_followees)
     page = spiderman.getHtml(type='raw')
     # get followees
     followees = (getfollowees(page))
     # save followees-info (for in)
 
-
     for val in followees:
         userinfo = getpageinfo(val)
-        print(userinfo)
-        # print(getUsername(val))
-        # print(getShowname(val))
+        print(userinfo['showname'])
+        user = Users(
+                username=userinfo['username'],
+                showname=userinfo['showname'],
+                followees=userinfo['followees'],
+                followers=userinfo['followers'],
+                focus=userinfo['focus']
+                )
+        conn.add(user)
+        conn.commit()
+
+
