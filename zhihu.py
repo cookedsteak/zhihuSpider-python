@@ -2,29 +2,27 @@ import spider
 import re
 from connection import Conn
 from model import Users
-from bs4 import BeautifulSoup
 
-header = {
+myCookie = 'Your Zhihu Cookie Here'
+
+myHeader = {
     'Connection': 'Keep-Alive',
     'Accept-Encoding':	'gzip, deflate, br',
     'Referer':	'https://www.zhihu.com/',
-    'Cookie':	'your cookie here',
+    'Cookie':	myCookie,
     'Host':	'www.zhihu.com',
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:46.0) Gecko/20100101 Firefox/46.0',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language':	'zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3'
 }
 
-url_followees = 'https://www.zhihu.com/people/jiao-niu-pai/followees'
-url_followers = 'https://www.zhihu.com/people/jiao-niu-pai/followers'
-url_info = 'https://www.zhihu.com/people/jiao-niu-pai'
 
-
-def getpageinfo(username):
+def getpageinfo(username, header):
     '''
-    获得用户主页的信息
+    get personal page information
     :param username:
-    :return: userinfo array
+    :param header:
+    :return: user array
     '''
     url_temp = 'https://www.zhihu.com/people/' + username
     spider_temp = spider.Spider(header=header, url=url_temp)
@@ -40,38 +38,51 @@ def getpageinfo(username):
         user['focus'] = '未知'
     return user
 
-def getfollowees(data):
+
+def getuserlists(username, header, ftype='followers'):
     '''
-    获得用户关注着页的关注者
-    :param data:
-    :return: followees array
+    get User followers/followees Lists
+    :param username:
+    :param header:
+    :param ftype:
+    :return: str array
     '''
+    url = 'https://www.zhihu.com/people/' + username + '/' + ftype
+    spiderMan = spider.Spider(header=header, url=url)
+    page = spiderMan.getHtml(type='raw')
     cer = re.compile(r'(?<=href="https://www.zhihu.com/people/).*?(?=" class=")')
-    str = cer.findall(data)
+    str = cer.findall(page)
     return str
 
 
 if __name__ == '__main__':
     # start db session
     conn = Conn().session
-    # use cookie to get personal page and info
-    spiderman = spider.Spider(header=header, url=url_followees)
-    page = spiderman.getHtml(type='raw')
-    # get followees
-    followees = (getfollowees(page))
-    # save followees-info (for in)
+    # todo check if database is empty
+    rows = conn.query(Users).filter(Users.fr_status == 0).all()[1:2]
 
-    for val in followees:
-        userinfo = getpageinfo(val)
-        print(userinfo['showname'])
-        user = Users(
-                username=userinfo['username'],
-                showname=userinfo['showname'],
-                followees=userinfo['followees'],
-                followers=userinfo['followers'],
-                focus=userinfo['focus']
-                )
-        conn.add(user)
-        conn.commit()
+    for fol in rows:
+        # get followers strings
+        followers = (getuserlists(username=fol.username, header=myHeader, ftype='followers'))
 
+        for val in followers:
+            # get followers info
+            userInfo = getpageinfo(username=val, header=myHeader)
+            print(userInfo['showname'])
+            user = Users(
+                    username=userInfo['username'],
+                    showname=userInfo['showname'],
+                    followees=userInfo['followees'],
+                    followers=userInfo['followers'],
+                    focus=userInfo['focus'],
+                    fr_status=0,
+                    fe_status=0
+                    )
+            conn.add(user)
+            conn.commit()
+
+        conn.query(Users).filter(Users.id == fol.id).\
+            update({Users.fr_status:1}, synchronize_session=False)
+
+        print('++++++'+fol.showname+'finished++++')
 
