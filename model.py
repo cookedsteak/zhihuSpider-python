@@ -20,5 +20,7 @@ class Users(Base):
     focus = Column('focus', VARCHAR(45))
     gender = Column('gender', Integer)
     sign = Column('sign', VARCHAR(255))
+    fr_status = Column('fr_status', Integer)
+    fe_status = Column('fe_status', Integer)
 
 
