@@ -2,8 +2,10 @@ import spider
 import re
 from connection import Conn
 from model import Users
+import queue
+import threading
 
-myCookie = 'Your Zhihu Cookie Here'
+myCookie = 'Your Cookie Here'
 
 myHeader = {
     'Connection': 'Keep-Alive',
@@ -44,7 +46,7 @@ def getuserlists(username, header, ftype='followers'):
     get User followers/followees Lists
     :param username:
     :param header:
-    :param ftype:
+    :param ftype: which list do you wanna get
     :return: str array
     '''
     url = 'https://www.zhihu.com/people/' + username + '/' + ftype
@@ -55,34 +57,69 @@ def getuserlists(username, header, ftype='followers'):
     return str
 
 
+def climbMain(conn, queue):
+    fol = queue.get_nowait()
+    # get followers strings
+    followers = (getuserlists(username=fol.username, header=myHeader, ftype='followers'))
+
+    for val in followers:
+        # get followers info
+        userInfo = getpageinfo(username=val, header=myHeader)
+        print(userInfo['showname'])
+        user = Users(
+                username=userInfo['username'],
+                showname=userInfo['showname'],
+                followees=userInfo['followees'],
+                followers=userInfo['followers'],
+                focus=userInfo['focus'],
+                fr_status=0,
+                fe_status=0
+                )
+        conn.add(user)
+        conn.commit()
+
+    conn.query(Users).filter(Users.id == fol.id).\
+        update({Users.fr_status:1}, synchronize_session=False)
+
+    print('++++++'+fol.showname+'finished++++')
+
+
+class MyClimberThread(threading.Thread):
+    def __init__(self, threadno, connection, queue):
+        threading.Thread.__init__(self, name=threadno)
+        self.connection = connection
+        self.queue = queue
+
+    def run(self):
+        climbMain(self.connection, self.queue)
+
+
 if __name__ == '__main__':
     # start db session
     conn = Conn().session
     # todo check if database is empty
-    rows = conn.query(Users).filter(Users.fr_status == 0).all()[1:2]
+    # records who havent been climbed $1 offset $2 limit
+    rows = conn.query(Users).filter(Users.fr_status == 0).all()[1:8]
 
-    for fol in rows:
-        # get followers strings
-        followers = (getuserlists(username=fol.username, header=myHeader, ftype='followers'))
+    myQueue = queue.Queue()
 
-        for val in followers:
-            # get followers info
-            userInfo = getpageinfo(username=val, header=myHeader)
-            print(userInfo['showname'])
-            user = Users(
-                    username=userInfo['username'],
-                    showname=userInfo['showname'],
-                    followees=userInfo['followees'],
-                    followers=userInfo['followers'],
-                    focus=userInfo['focus'],
-                    fr_status=0,
-                    fe_status=0
-                    )
-            conn.add(user)
-            conn.commit()
+    for row in rows:
+        myQueue.put(row)
 
-        conn.query(Users).filter(Users.id == fol.id).\
-            update({Users.fr_status:1}, synchronize_session=False)
+    while(myQueue.qsize()):
+        tasks = []
+        # thread number
+        for i in range(0, 10):
+            Thread = MyClimberThread(i, connection=conn, queue=myQueue)
+            Thread.setDaemon(False)
+            Thread.start()
+            tasks.append(Thread)
 
-        print('++++++'+fol.showname+'finished++++')
+        for task in tasks:
+            if task.isAlive():
+                tasks.append(task)
+            continue
+
+
+
 
